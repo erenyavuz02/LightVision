@@ -35,6 +35,7 @@ class CLIP(nn.Module):
             cfg=cfg["text_cfg"], projection_dim=self.projection_dim
         )
         self.logit_scale = nn.Parameter(torch.ones([]) * math.log(1.0 / 0.07))
+        
 
     def _exponentiate_and_clip_logits(self, max_scale: float = 100.0):
         scale = self.logit_scale.exp()
@@ -52,6 +53,15 @@ class CLIP(nn.Module):
     def encode_text(self, text: torch.Tensor, normalize: bool = False):
         text_features = self.text_encoder(text_tokens=text, key_padding_mask=None)
         return F.normalize(text_features, dim=-1) if normalize else text_features
+
+    def get_positional_embedding(self):
+        """
+        Get positional embedding for text encoder.
+        """
+        if self.text_encoder.get_positional_embedding() is not None:
+            return self.text_encoder.get_positional_embedding()
+        else:
+            raise ValueError("Positional embedding not found in text encoder.")
 
     def forward(
         self,

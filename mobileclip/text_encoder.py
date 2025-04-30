@@ -141,6 +141,14 @@ class TextTransformer(nn.Module):
         self.model_dim = model_dim
         self.causal_masking = cfg["causal_masking"]
 
+
+    def get_positional_embedding(self) -> Optional[nn.Module]:
+        """Return positional embedding layer."""
+        if self.positional_embedding is not None:
+            return self.positional_embedding
+        else:
+            raise ValueError("Positional embedding not found in text encoder.")
+    
     def forward_embedding(self, text_tokens: Tensor) -> Tensor:
         """Return text embedding for all tokens.
 
