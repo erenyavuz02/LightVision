@@ -1,0 +1,20 @@
+custom_caption:
+  path: data/custom_captions.json
+dataset:
+  captions_csv_filename: captions.txt
+  description: A dataset of 8,000 images with captions.
+  download_url: https://www.kaggle.com/api/v1/datasets/download/adityajn105/flickr8k
+  images_folder_name: Images
+  name: Flickr8k
+  output_folder_name: output
+  url: https://www.kaggle.com/adityajn105/flickr8k
+  zip_filename: flickr8k.zip
+model:
+  base_model_path: checkpoints/mobileclip_s0.pt
+  checkpoint_dir: checkpoints
+  device: cpu
+  download_url: https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s0.pt
+  filename: mobileclip_s0.pt
+  name: mobileclip_s0
+project:
+  root: /Users/erenyavuz/Desktop/KU/25 Spring/COMP447/Project/Repo/FlightVision
