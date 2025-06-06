@@ -90,6 +90,7 @@ def long_clip_loss(model, image_embedding, long_embedding, short_embedding):
 
     # Calculate similarity matrices
     sim_i2tl = torch.matmul(image_features_long, text_feat_all_long.T)
+    
     sim_tl2i = torch.matmul(image_feat_all_long, text_features_long.T)
     sim_tl2i = sim_tl2i.T
 
@@ -172,7 +173,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
         
         for batch_idx, batch_data in enumerate(progress_bar):
-            images = batch_data['image'].to(device)  
+            images = batch_data['images'].to(device)  
             short_captions = tokenizer(batch_data['short_caption']).to(device)
             long_captions = tokenizer(batch_data['long_caption']).to(device)
 
@@ -364,3 +365,5 @@ def PCA(input_tensor, PCA_dim):
     X_reversed += mean
 
     return X_reversed
+
+
