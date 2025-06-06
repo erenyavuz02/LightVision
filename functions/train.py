@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
 import time
+import torch.nn.functional as F
+from .mod_77_token_training import mod_77_long_clip_loss, prepare_subsections_batch, encode_text_subsections
 
 def get_positional_embedding(model, lambda2: int = 4):
     """
@@ -127,17 +129,19 @@ def long_clip_loss(model, image_embedding, long_embedding, short_embedding):
     return total_loss
 
 
-def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_rate=1e-4, tokenizer = None):
+def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_rate=1e-4, tokenizer=None, use_mod_77=True):
     """
     Train the model with positional embedding modification and custom dataset.
     
     Args:
         model: The mobile CLIP model to train
         config: Configuration dictionary
-        dataset_path: Path to the all_captions.json file
+        dataset: Dataset object
         num_epochs: Number of training epochs
         batch_size: Batch size for training
         learning_rate: Learning rate for optimizer
+        tokenizer: Text tokenizer
+        use_mod_77: Whether to use mod 77 token training logic
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -152,10 +156,19 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
     model = apply_positional_embedding_modification(model, lambda2=4)
     
     # Step 2: Load and split dataset
-    # Create datasets and dataloaders
     train_loader = dataset.get_dataloader("train")
     test_loader = dataset.get_dataloader("test")
     
+    # Check if dataset supports mod 77 token training
+    sample_batch = next(iter(train_loader))
+    has_subsections = 'subsections' in sample_batch or 'long_subsections' in sample_batch
+    
+    if use_mod_77 and has_subsections:
+        print("Using mod 77 token training with subsections...")
+        training_mode = "mod_77"
+    else:
+        print("Using standard training...")
+        training_mode = "standard"
     
     # Step 3: Setup optimizer
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
@@ -174,17 +187,33 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
         for batch_idx, batch_data in enumerate(progress_bar):
             images = batch_data['image'].to(device)  
             short_captions = tokenizer(batch_data['short_caption']).to(device)
-            long_captions = tokenizer(batch_data['long_caption']).to(device)
-
+            
             optimizer.zero_grad()
 
             # Forward pass
             image_features = model.encode_image(images)
             text_features_short = model.encode_text(short_captions)
-            text_features_long = model.encode_text(long_captions)
-
-            # Calculate contrastive loss
-            loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
+            
+            if training_mode == "mod_77" and 'subsections' in batch_data:
+                # Use mod 77 token training with subsections
+                subsections_data = batch_data['subsections']
+                
+                # Prepare subsections batch
+                subsections_batch = prepare_subsections_batch(subsections_data, tokenizer, device)
+                
+                # Encode subsections
+                text_subsections_batch = encode_text_subsections(model, subsections_batch, device)
+                
+                # Calculate mod 77 loss
+                loss = mod_77_long_clip_loss(model, image_features, text_subsections_batch, text_features_short)
+                
+            else:
+                # Standard training
+                long_captions = tokenizer(batch_data['long_caption']).to(device)
+                text_features_long = model.encode_text(long_captions)
+                
+                # Calculate standard loss
+                loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
 
             # Backward pass
             loss.backward()
@@ -193,7 +222,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             batch_loss = loss.item()
             total_loss += batch_loss
             batch_losses.append(batch_loss)
-            progress_bar.set_postfix({'loss': batch_loss, 'avg_loss': total_loss/(batch_idx+1)})
+            progress_bar.set_postfix({'loss': batch_loss, 'avg_loss': total_loss/(batch_idx+1), 'mode': training_mode})
         
         # Update learning rate
         scheduler.step()
@@ -204,7 +233,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
         epochs_list.append(epoch + 1)
         
         # Validation
-        val_loss = validate_model(model, test_loader, device)
+        val_loss = validate_model(model, test_loader, device, tokenizer, use_mod_77)
         val_losses.append(val_loss)
         
         # Print epoch summary
@@ -239,23 +268,42 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
     plot_final_results(epochs_list, train_losses, val_losses, elapsed_time)
     return model
 
-def validate_model(model, test_loader, device):
+def validate_model(model, test_loader, device, tokenizer=None, use_mod_77=True):
     """
     Validate the model on test dataset.
     """
     model.eval()
     total_loss = 0
     
+    # Check if test loader supports mod 77
+    sample_batch = next(iter(test_loader))
+    has_subsections = 'subsections' in sample_batch
+    training_mode = "mod_77" if use_mod_77 and has_subsections else "standard"
+    
+    # Reset the iterator
+    test_loader = iter(test_loader)
+    
     with torch.no_grad():
-        for images, texts in test_loader:
-            images = images.to(device)
+        for batch_data in test_loader:
+            images = batch_data['image'].to(device)
+            short_captions = tokenizer(batch_data['short_caption']).to(device)
             
             # Forward pass
             image_features = model.encode_image(images)
-            text_features = model.encode_text(texts)
+            text_features_short = model.encode_text(short_captions)
             
-            # Calculate loss
-            loss = contrastive_loss(image_features, text_features)
+            if training_mode == "mod_77" and 'subsections' in batch_data:
+                # Use mod 77 validation
+                subsections_data = batch_data['subsections']
+                subsections_batch = prepare_subsections_batch(subsections_data, tokenizer, device)
+                text_subsections_batch = encode_text_subsections(model, subsections_batch, device)
+                loss = mod_77_long_clip_loss(model, image_features, text_subsections_batch, text_features_short)
+            else:
+                # Standard validation
+                long_captions = tokenizer(batch_data['long_caption']).to(device)
+                text_features_long = model.encode_text(long_captions)
+                loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
+            
             total_loss += loss.item()
     
     model.train()
