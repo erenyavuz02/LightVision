@@ -17,4 +17,4 @@ model:
   filename: mobileclip_s0.pt
   name: mobileclip_s0
 project:
-  root: /Users/erenyavuz/Desktop/KU/25 Spring/COMP447/Project/Repo/FlightVision
+  root: /Users/damdam/Desktop/447 project/code/LightVision
