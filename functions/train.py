@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
 import time
+import torch.nn.functional as F
 
 def get_positional_embedding(model, lambda2: int = 4):
     """
@@ -173,9 +174,10 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
         
         for batch_idx, batch_data in enumerate(progress_bar):
+
             images = batch_data['images'].to(device)  
-            short_captions = tokenizer(batch_data['short_caption']).to(device)
-            long_captions = tokenizer(batch_data['long_caption']).to(device)
+            short_captions = tokenizer(batch_data['short_captions']).to(device)
+            long_captions = tokenizer(batch_data['long_captions']).to(device)
 
             optimizer.zero_grad()
 
@@ -248,15 +250,18 @@ def validate_model(model, test_loader, device):
     total_loss = 0
     
     with torch.no_grad():
-        for images, texts in test_loader:
-            images = images.to(device)
+        for batch_idx, batch_data in enumerate(test_loader):
+            images = batch_data['images'].to(device)  
+            short_captions = tokenizer(batch_data['short_captions']).to(device)
+            long_captions = tokenizer(batch_data['long_captions']).to(device)
             
             # Forward pass
             image_features = model.encode_image(images)
-            text_features = model.encode_text(texts)
+            text_features_short = model.encode_text(short_captions)
+            text_features_long = model.encode_text(long_captions)
             
-            # Calculate loss
-            loss = contrastive_loss(image_features, text_features)
+            # Calculate loss using the same loss function as training
+            loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
             total_loss += loss.item()
     
     model.train()
