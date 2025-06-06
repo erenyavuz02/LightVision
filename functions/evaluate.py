@@ -142,7 +142,7 @@ def evaluate_dataset(model=None, testDataset=None, config=None, k_values=[1, 5, 
     results = {
         'evaluation_timestamp': datetime.now().isoformat(),
         'model_name': config.get('model.name', 'Unknown'),
-        'device': config.get('model.device', 'Unknown'),
+        'device': config.get('model.device', 'cpu'),
         'dataset_info': split_info,
         'k_values': k_values
     }
