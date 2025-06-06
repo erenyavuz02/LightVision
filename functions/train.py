@@ -6,7 +6,7 @@ import json
 import os
 from tqdm import tqdm
 import numpy as np
-from .dataset import CustomDataset, split_dataset
+from dataset import CustomDataset
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
 import time

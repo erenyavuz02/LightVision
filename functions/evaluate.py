@@ -246,9 +246,15 @@ def print_summary(results):
             print(f"  {k_metric}: Train={train_val:.4f}, Test={test_val:.4f}, Diff={diff:+.4f}")
             
             
-def plot_sample_result(sample_results):
-    """Plot sample results for short and long captions"""
+def plot_sample_result(sample_results, dataset=None):
+    """Plot sample results for short and long captions showing retrieved images"""
     import matplotlib.pyplot as plt
+    from PIL import Image
+    import os
+    
+    if dataset is None:
+        print("Dataset is required to load images")
+        return
     
     for idx, sample in enumerate(sample_results):
         if sample is None:
@@ -259,21 +265,51 @@ def plot_sample_result(sample_results):
         short_results = sample['short_results']
         long_results = sample['long_results']
         
+        # Create figure with subplots for images
+        fig, axes = plt.subplots(2, 5, figsize=(20, 8))
+        fig.suptitle(f"Sample {idx + 1}: Retrieved Images Comparison", fontsize=16)
+        
         # Plot short caption results
-        plt.figure(figsize=(12, 6))
-        plt.subplot(1, 2, 1)
-        plt.title(f"Short Caption: {short_caption}")
-        plt.bar(range(len(short_results)), [result['score'] for result in short_results], 
-                tick_label=[result['image_name'] for result in short_results])
-        plt.xticks(rotation=45)
+        axes[0, 0].text(0.5, 0.5, f"Short Caption:\n{short_caption}", 
+                       ha='center', va='center', wrap=True, fontsize=10)
+        axes[0, 0].axis('off')
+        
+        for i, result in enumerate(short_results[:4]):  # Show 4 images + 1 text
+            try:
+                # Load image
+                image_path = os.path.join(dataset.images_dir, result['image_name'])
+                img = Image.open(image_path)
+                
+                # Display image
+                axes[0, i + 1].imshow(img)
+                axes[0, i + 1].set_title(f"#{i + 1}: {result['image_name']}\nScore: {result['score']:.3f}", 
+                                        fontsize=8)
+                axes[0, i + 1].axis('off')
+            except Exception as e:
+                axes[0, i + 1].text(0.5, 0.5, f"Error loading\n{result['image_name']}", 
+                                   ha='center', va='center', fontsize=8)
+                axes[0, i + 1].axis('off')
         
         # Plot long caption results
-        plt.subplot(1, 2, 2)
-        plt.title(f"Long Caption: {long_caption}")
-        plt.bar(range(len(long_results)), [result['score'] for result in long_results], 
-                tick_label=[result['image_name'] for result in long_results])
-        plt.xticks(rotation=45)
+        axes[1, 0].text(0.5, 0.5, f"Long Caption:\n{long_caption}", 
+                       ha='center', va='center', wrap=True, fontsize=10)
+        axes[1, 0].axis('off')
+        
+        for i, result in enumerate(long_results[:4]):  # Show 4 images + 1 text
+            try:
+                # Load image
+                image_path = os.path.join(dataset.images_dir, result['image_name'])
+                img = Image.open(image_path)
+                
+                # Display image
+                axes[1, i + 1].imshow(img)
+                axes[1, i + 1].set_title(f"#{i + 1}: {result['image_name']}\nScore: {result['score']:.3f}", 
+                                        fontsize=8)
+                axes[1, i + 1].axis('off')
+            except Exception as e:
+                axes[1, i + 1].text(0.5, 0.5, f"Error loading\n{result['image_name']}", 
+                                   ha='center', va='center', fontsize=8)
+                axes[1, i + 1].axis('off')
         
         plt.tight_layout()
         plt.show()
-        
