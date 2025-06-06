@@ -68,7 +68,66 @@ def contrastive_loss(image_features, text_features, temperature=0.07):
     
     return (loss_img + loss_txt) / 2
 
-def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_rate=1e-4):
+def long_clip_loss(model, image_embedding, long_embedding, short_embedding):
+    image_features_long = image_embedding
+    text_features_long = long_embedding
+    text_features_short = short_embedding
+
+    # Normalize features
+    image_features_long = image_features_long / image_features_long.norm(dim=1, keepdim=True)
+    text_features_long = text_features_long / text_features_long.norm(dim=1, keepdim=True)
+    text_features_short = text_features_short / text_features_short.norm(dim=1, keepdim=True)
+
+    # Apply PCA to get compressed image features
+    image_features_short = PCA(image_features_long, 32)
+    image_features_short = image_features_short / image_features_short.norm(dim=1, keepdim=True)
+
+    # Since we're not using distributed training, simplify this part
+    image_feat_all_long = image_features_long
+    image_features_all_short = image_features_short
+    text_feat_all_long = text_features_long
+    text_feat_all_short = text_features_short
+
+    # Calculate similarity matrices
+    sim_i2tl = torch.matmul(image_features_long, text_feat_all_long.T)
+    sim_tl2i = torch.matmul(image_feat_all_long, text_features_long.T)
+    sim_tl2i = sim_tl2i.T
+
+    sim_i2ts = torch.matmul(image_features_short, text_feat_all_short.T)
+    sim_ts2i = torch.matmul(image_features_all_short, text_features_short.T)
+    sim_ts2i = sim_ts2i.T
+
+    # Apply temperature scaling
+    logit_scale = model.logit_scale if hasattr(model, 'logit_scale') else 1.0
+
+    if isinstance(logit_scale, torch.nn.Parameter):
+        sim_i2tl = logit_scale.exp() * sim_i2tl
+        sim_tl2i = logit_scale.exp() * sim_tl2i
+        sim_i2ts = logit_scale.exp() * sim_i2ts
+        sim_ts2i = logit_scale.exp() * sim_ts2i
+
+    # Create targets for loss calculation
+    bs = image_embedding.size(0)
+    targets = torch.arange(bs, device=image_embedding.device)
+
+    # Calculate losses
+    loss_itcl = (
+        F.cross_entropy(sim_i2tl, targets, label_smoothing=0.1)
+        + F.cross_entropy(sim_tl2i, targets, label_smoothing=0.1)
+    ) / 2
+
+    loss_itcs = (
+        F.cross_entropy(sim_i2ts, targets, label_smoothing=0.1)
+        + F.cross_entropy(sim_ts2i, targets, label_smoothing=0.1)
+    ) / 2
+
+    # single loss by combining the two
+    total_loss = (loss_itcl + loss_itcs) / 2
+
+    return total_loss
+
+
+def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_rate=1e-4, tokenizer = None):
     """
     Train the model with positional embedding modification and custom dataset.
     
@@ -112,19 +171,21 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
         batch_losses = []
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
         
-        for batch_idx, (images, texts) in enumerate(progress_bar):
-            images = images.to(device)
-            # texts are already tokenized in the dataset
-            
+        for batch_idx, batch_data in enumerate(progress_bar):
+            images = batch_data['image'].to(device)  
+            short_captions = tokenizer(batch_data['short_caption']).to(device)
+            long_captions = tokenizer(batch_data['long_caption']).to(device)
+
             optimizer.zero_grad()
-            
+
             # Forward pass
             image_features = model.encode_image(images)
-            text_features = model.encode_text(texts)
-            
+            text_features_short = model.encode_text(short_captions)
+            text_features_long = model.encode_text(long_captions)
+
             # Calculate contrastive loss
-            loss = contrastive_loss(image_features, text_features)
-            
+            loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
+
             # Backward pass
             loss.backward()
             optimizer.step()
@@ -282,3 +343,24 @@ def plot_final_results(epochs, train_losses, val_losses, total_time):
     
     plt.tight_layout()
     plt.show()
+
+
+#rewrite PCA to avoid inf
+def PCA(input_tensor, PCA_dim):
+    # 计算均值
+    mean = torch.mean(input_tensor, dim=0)
+    # 去均值
+    X_centered = input_tensor - mean.unsqueeze(0)
+    X_centered = X_centered.float()
+
+    # 使用SVD而不是eig来计算主成分
+    U, S, Vt = torch.linalg.svd(X_centered, full_matrices=False)
+    principal_components = Vt.T[:, :PCA_dim]
+
+    # 转换到新的维度
+    X_transformed = torch.mm(X_centered, principal_components)
+    # 恢复到原始空间
+    X_reversed = torch.mm(X_transformed, principal_components.T)
+    X_reversed += mean
+
+    return X_reversed
