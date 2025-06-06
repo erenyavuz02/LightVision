@@ -47,7 +47,7 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
     
     # Evaluate each image-caption pair
     for idx, item in enumerate(data):
-        if verbose and idx % 10 == 0:
+        if verbose and idx % 200 == 0:
             print(f"Processing query {idx + 1}/{total_queries}")
         
         target_image_name = item['image_name']
