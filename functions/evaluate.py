@@ -122,6 +122,9 @@ def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, 
     Returns:
         dict: Complete evaluation results
     """
+    
+    model.evaluate()  # Set model to evaluation mode
+    
     if model is None or testDataset is None or config is None or tokenizer is None:
         raise ValueError("model, testDataset, config, and tokenizer are required")
     
