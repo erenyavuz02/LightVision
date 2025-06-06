@@ -42,6 +42,8 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
     
     total_queries = len(data)
     
+    sample_return = None  # For returning a sample query and results
+    
     if verbose:
         print(f"Processing {total_queries} queries...")
     
@@ -71,6 +73,14 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
             top_k_images = [result['image_name'] for result in long_results[:k]]
             if target_image_name in top_k_images:
                 long_caption_results[k] += 1
+                
+        if idx == 0:
+            sample_return = {
+                'short_caption': short_caption,
+                'long_caption': long_caption,
+                'short_results': short_results[:5],  # Return top 5 for sample
+                'long_results': long_results[:5]
+            }
     
     # Calculate final metrics
     short_recalls = calculate_recall_at_k(short_caption_results, total_queries, k_values)
@@ -103,7 +113,7 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
         for k in k_values:
             print(f"  Recall@{k}: {avg_recalls[f'recall@{k}']:.4f}")
     
-    return results
+    return results, sample_return
 
 def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, k_values=[1, 5, 10], 
                     force_rebuild_index=False, verbose=True):
@@ -151,6 +161,8 @@ def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, 
         'k_values': k_values
     }
     
+    sample_results = []
+    
     # Evaluate on both train and test splits
     for split in ['train', 'test']:
         if verbose:
@@ -165,10 +177,12 @@ def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, 
         retriever.build_or_load_index(force_rebuild=force_rebuild_index, verbose=verbose)
         
         # Evaluate retrieval performance
-        split_results = evaluate_retrieval(
+        split_results, sample_result = evaluate_retrieval(
             retriever, testDataset, split=split, 
             k_values=k_values, verbose=verbose
         )
+        
+        sample_results.append(sample_result)
         
         results[f'{split}_results'] = split_results
     
@@ -181,7 +195,7 @@ def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, 
         print(f"{'='*50}")
         print_summary(results)
     
-    return results
+    return results, sample_results
 
 def save_results(results, config, verbose=True):
     """Save evaluation results to a JSON file"""
@@ -232,3 +246,36 @@ def print_summary(results):
             test_val = test_avg[k_metric]
             diff = train_val - test_val
             print(f"  {k_metric}: Train={train_val:.4f}, Test={test_val:.4f}, Diff={diff:+.4f}")
+            
+            
+def plot_sample_result(sample_results):
+    """Plot sample results for short and long captions"""
+    import matplotlib.pyplot as plt
+    
+    for idx, sample in enumerate(sample_results):
+        if sample is None:
+            continue
+        
+        short_caption = sample['short_caption']
+        long_caption = sample['long_caption']
+        short_results = sample['short_results']
+        long_results = sample['long_results']
+        
+        # Plot short caption results
+        plt.figure(figsize=(12, 6))
+        plt.subplot(1, 2, 1)
+        plt.title(f"Short Caption: {short_caption}")
+        plt.bar(range(len(short_results)), [result['score'] for result in short_results], 
+                tick_label=[result['image_name'] for result in short_results])
+        plt.xticks(rotation=45)
+        
+        # Plot long caption results
+        plt.subplot(1, 2, 2)
+        plt.title(f"Long Caption: {long_caption}")
+        plt.bar(range(len(long_results)), [result['score'] for result in long_results], 
+                tick_label=[result['image_name'] for result in long_results])
+        plt.xticks(rotation=45)
+        
+        plt.tight_layout()
+        plt.show()
+        
