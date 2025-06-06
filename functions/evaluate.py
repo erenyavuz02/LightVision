@@ -47,7 +47,7 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
     
     # Evaluate each image-caption pair
     for idx, item in enumerate(data):
-        if verbose and idx % 100 == 0:
+        if verbose and idx % 10 == 0:
             print(f"Processing query {idx + 1}/{total_queries}")
         
         target_image_name = item['image_name']
@@ -105,7 +105,7 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
     
     return results
 
-def evaluate_dataset(model=None, testDataset=None, config=None, k_values=[1, 5, 10], 
+def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, k_values=[1, 5, 10], 
                     force_rebuild_index=False, verbose=True):
     """
     Main evaluation function for the dataset
@@ -114,6 +114,7 @@ def evaluate_dataset(model=None, testDataset=None, config=None, k_values=[1, 5, 
         model: Loaded model (e.g., MobileCLIP)
         testDataset: CustomDataset instance
         config: Configuration object
+        tokenizer: Text tokenizer for the model
         k_values: List of k values for Recall@K calculation
         force_rebuild_index: Whether to force rebuild FAISS index
         verbose: Whether to print progress
@@ -121,8 +122,8 @@ def evaluate_dataset(model=None, testDataset=None, config=None, k_values=[1, 5, 
     Returns:
         dict: Complete evaluation results
     """
-    if model is None or testDataset is None or config is None:
-        raise ValueError("model, testDataset, and config are required")
+    if model is None or testDataset is None or config is None or tokenizer is None:
+        raise ValueError("model, testDataset, config, and tokenizer are required")
     
     if verbose:
         print("Starting dataset evaluation...")
@@ -155,7 +156,7 @@ def evaluate_dataset(model=None, testDataset=None, config=None, k_values=[1, 5, 
             print(f"{'='*50}")
         
         # Create retriever for this split
-        retriever = FAISSRetriever(config, model, testDataset, split=split)
+        retriever = FAISSRetriever(config, model, testDataset, tokenizer, split=split)
         
         # Build or load FAISS index
         retriever.build_or_load_index(force_rebuild=force_rebuild_index, verbose=verbose)

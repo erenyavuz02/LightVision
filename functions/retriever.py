@@ -8,7 +8,7 @@ from pathlib import Path
 class FAISSRetriever:
     """FAISS-based image retrieval system for evaluating image-text models"""
     
-    def __init__(self, config, model, dataset, split='test'):
+    def __init__(self, config, model, dataset, tokenizer, split='test'):
         """
         Initialize the FAISS retriever
         
@@ -16,11 +16,13 @@ class FAISSRetriever:
             config: Configuration object
             model: The loaded model (e.g., MobileCLIP)
             dataset: CustomDataset instance
+            tokenizer: Text tokenizer for the model
             split: Which split to use ('train' or 'test')
         """
         self.config = config
         self.model = model
         self.dataset = dataset
+        self.tokenizer = tokenizer
         self.split = split
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
@@ -183,11 +185,8 @@ class FAISSRetriever:
         # Encode query text
         self.model.eval()
         with torch.no_grad():
-            # Tokenize text (assuming mobileclip tokenizer)
-            from functions.model import load_model
-            _, _, tokenizer = load_model(self.config, verbose=False)
-            
-            text_tokens = tokenizer([query_text]).to(self.device)
+            # Use the tokenizer passed during initialization
+            text_tokens = self.tokenizer([query_text]).to(self.device)
             text_features = self.model.encode_text(text_tokens)
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         
