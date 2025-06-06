@@ -1,12 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
-import json
-import os
 from tqdm import tqdm
 import numpy as np
-from dataset import CustomDataset
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
 import time
