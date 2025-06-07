@@ -44,7 +44,7 @@ def calculate_subsection_weights(num_subsections: int) -> list:
 
 def weighted_contrastive_loss_subsections(image_features, text_subsections_batch, temperature=0.07):
     """
-    Calculate contrastive loss using weighted similarity scores between sub-captions and images.
+    OPTIMIZED: Calculate contrastive loss using weighted similarity scores between sub-captions and images.
     For each sample, compute dot products between image and each sub-caption, then weight and sum them.
     
     Args:
@@ -58,47 +58,53 @@ def weighted_contrastive_loss_subsections(image_features, text_subsections_batch
     batch_size = image_features.shape[0]
     device = image_features.device
     
-    # Normalize image features
-    image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+    # Normalize image features once
+    image_features = F.normalize(image_features, dim=-1)
     
-    # Create similarity matrix by weighting dot products
-    # sim_matrix[i][j] = weighted sum of similarities between image_i and all subsections of text_j
-    sim_i2t = torch.zeros(batch_size, batch_size, device=device)
-    sim_t2i = torch.zeros(batch_size, batch_size, device=device)
+    # Pre-normalize all text subsections and prepare for batch processing
+    normalized_subsections_batch = []
+    weights_batch = []
     
     for text_idx in range(batch_size):
         text_subsections = text_subsections_batch[text_idx]
-        num_subsections = len(text_subsections)
-        
-        
-        if num_subsections == 0:
-            # If no subsections, similarity is 0 (shouldn't happen in practice)
+        if len(text_subsections) == 0:
+            # Handle empty subsections case
+            normalized_subsections_batch.append([])
+            weights_batch.append([])
             continue
+            
+        # Normalize all subsections for this sample
+        normalized_subsections = [F.normalize(subsection, dim=-1) for subsection in text_subsections]
+        normalized_subsections_batch.append(normalized_subsections)
         
-        # Get weights for this text sample's subsections
-        weights = calculate_subsection_weights(num_subsections)
+        # Get weights for this sample
+        weights = calculate_subsection_weights(len(text_subsections))
+        weights_batch.append(torch.tensor(weights, device=device, dtype=torch.float32))
+    
+    # Create similarity matrices more efficiently
+    sim_i2t = torch.zeros(batch_size, batch_size, device=device)
+    sim_t2i = torch.zeros(batch_size, batch_size, device=device)
+    
+    # Compute similarities using matrix operations where possible
+    for text_idx in range(batch_size):
+        if len(normalized_subsections_batch[text_idx]) == 0:
+            continue
+            
+        # Stack subsections for this text sample
+        text_subsections = torch.stack(normalized_subsections_batch[text_idx])  # [num_subsections, embed_dim]
+        weights = weights_batch[text_idx]  # [num_subsections]
         
-        # Calculate weighted similarity for this text sample against all images
-        for img_idx in range(batch_size):
-            current_image = image_features[img_idx]  # [embed_dim]
-            
-            # Calculate weighted sum of similarities between this image and all subsections
-            weighted_similarity = 0.0
-            
-            for subsection_idx, subsection_features in enumerate(text_subsections):
-                # Normalize subsection features
-                subsection_features = subsection_features / subsection_features.norm(dim=-1, keepdim=True)
-                
-                # Calculate dot product (similarity score)
-                similarity = torch.dot(current_image, subsection_features)
-                
-                # Apply weight and add to weighted sum
-                weight = weights[subsection_idx]
-                weighted_similarity += weight * similarity
-            
-            # Store weighted similarity scores
-            sim_i2t[img_idx, text_idx] = weighted_similarity
-            sim_t2i[text_idx, img_idx] = weighted_similarity
+        # Compute similarities between all images and all subsections of this text
+        # image_features: [batch_size, embed_dim]
+        # text_subsections: [num_subsections, embed_dim]
+        similarities = torch.matmul(image_features, text_subsections.T)  # [batch_size, num_subsections]
+        
+        # Apply weights and sum
+        weighted_similarities = torch.matmul(similarities, weights)  # [batch_size]
+        
+        # Store in similarity matrices
+        sim_i2t[:, text_idx] = weighted_similarities
+        sim_t2i[text_idx, :] = weighted_similarities
     
     # Apply temperature scaling
     sim_i2t = sim_i2t / temperature
@@ -146,13 +152,14 @@ def mod_77_long_clip_loss(model, image_embedding, long_subsections_batch, short_
         Combined weighted loss
     """
     # Normalize features
-    image_features_long = image_embedding / image_embedding.norm(dim=1, keepdim=True)
-    text_features_short = short_embedding / short_embedding.norm(dim=1, keepdim=True)
+    image_features_long = F.normalize(image_embedding, dim=1)
+    text_features_short = F.normalize(short_embedding, dim=1)
     
-    # Apply PCA to get compressed image features (assuming PCA function exists)
-    from .train import PCA
-    image_features_short = PCA(image_features_long, 32)
-    image_features_short = image_features_short / image_features_short.norm(dim=1, keepdim=True)
+    # Simple PCA approximation using SVD for dimensionality reduction
+    # This replaces the problematic PCA import
+    U, S, V = torch.svd(image_features_long)
+    image_features_short = torch.matmul(image_features_long, V[:, :32])  # Reduce to 32 dimensions
+    image_features_short = F.normalize(image_features_short, dim=1)
     
     # Calculate weighted loss for long subsections
     loss_long = mod_77_contrastive_loss(model, image_features_long, long_subsections_batch, temperature)
@@ -193,6 +200,59 @@ def validate_subsection_weights():
         weights = calculate_subsection_weights(i)
         print(f"Subsections: {i}, Weights: {[f'{w:.4f}' for w in weights]}, Sum: {sum(weights):.4f}")
 
+def test_loss_function():
+    """
+    Test the optimized loss function implementation.
+    """
+    print("\n" + "="*50)
+    print("TESTING OPTIMIZED LOSS FUNCTION")
+    print("="*50)
+    
+    # Create test data
+    batch_size = 4
+    embed_dim = 512
+    device = torch.device('cpu')
+    
+    # Mock image features (with gradients enabled)
+    image_features = torch.randn(batch_size, embed_dim, device=device, requires_grad=True)
+    
+    # Mock text subsections batch (different numbers of subsections per sample)
+    text_subsections_batch = []
+    for i in range(batch_size):
+        num_subsections = (i % 3) + 1  # 1, 2, 3, 1 subsections
+        subsections = [torch.randn(embed_dim, device=device, requires_grad=True) for _ in range(num_subsections)]
+        text_subsections_batch.append(subsections)
+    
+    print(f"Test setup:")
+    print(f"  Batch size: {batch_size}")
+    print(f"  Embedding dimension: {embed_dim}")
+    print(f"  Subsections per sample: {[len(subs) for subs in text_subsections_batch]}")
+    
+    # Test the loss function
+    try:
+        loss = weighted_contrastive_loss_subsections(image_features, text_subsections_batch)
+        print(f"\n✓ Loss function executed successfully!")
+        print(f"  Loss value: {loss.item():.4f}")
+        print(f"  Loss requires grad: {loss.requires_grad}")
+        
+        # Test backward pass
+        loss.backward()
+        print(f"✓ Backward pass successful!")
+        
+        # Check gradients
+        print(f"✓ Image features gradients: {image_features.grad is not None}")
+        for i, subsections in enumerate(text_subsections_batch):
+            grad_status = [sub.grad is not None for sub in subsections]
+            print(f"✓ Text subsections {i+1} gradients: {grad_status}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"\n✗ Error in loss function: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 if __name__ == "__main__":
     # Test the weight calculation
     validate_subsection_weights()
@@ -203,6 +263,9 @@ if __name__ == "__main__":
     print("- 3rd subsection: Less important (weight = 1)")
     print("- 4th+ subsections: Exponentially decreasing importance")
     print("- All weights are normalized to maintain loss scale")
+    
+    # Test the optimized loss function
+    test_loss_function()
 
 
 def encode_text_subsections_batch(model, tokenizer, long_splitted_captions, device):
