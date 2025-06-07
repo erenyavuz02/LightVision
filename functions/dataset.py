@@ -293,7 +293,8 @@ class CustomDataset(Dataset):
                 'image_name': image_name,
                 'image_path': os.path.join(self.images_dir, image_name),
                 'short_caption': captions['short_caption'],
-                'long_caption': captions['long_caption']
+                'long_caption': captions['long_caption'],
+                'long_splitted_caption': divide_into_meaningful_subsections(captions['long_caption'], max_tokens=77)
             }
             
             if image_name in self.train_images:
@@ -414,7 +415,7 @@ class CustomDataset(Dataset):
             'image_paths': [item['image_path'] for item in batch],
             'short_captions': [item['short_caption'] for item in batch],
             'long_captions': [item['long_caption'] for item in batch],
-            'long_splitted_captions': [item['long_splitted_captions'] for item in batch]  # List of split captions
+            'long_splitted_captions': [item['long_splitted_caption'] for item in batch]  # List of split captions
         }
 
 
@@ -458,7 +459,7 @@ class TrainTestSubset:
         
         
         long_caption = item['long_caption']
-        long_splitted_captions = divide_into_meaningful_subsections(long_caption, max_tokens=77)
+        long_splitted_captions = item['long_splitted_caption']
         
         
         return {
@@ -467,5 +468,5 @@ class TrainTestSubset:
             'image_path': item['image_path'],
             'short_caption': item['short_caption'],
             'long_caption': item['long_caption'],
-            'long_splitted_captions': long_splitted_captions # List of split captions
+            'long_splitted_caption': long_splitted_captions # List of split captions
         }
