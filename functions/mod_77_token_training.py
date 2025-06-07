@@ -41,34 +41,6 @@ def calculate_subsection_weights(num_subsections: int) -> list:
     
     return normalized_weights
 
-def encode_text_subsections(model, subsections_batch, device):
-    """
-    Encode multiple text subsections for a batch of samples.
-    
-    Args:
-        model: The CLIP model
-        subsections_batch: List of lists, where each inner list contains tokenized subsections for one sample
-        device: Device to run on
-    
-    Returns:
-        List of tensors, each containing encoded features for subsections of one sample
-    """
-    batch_encoded_subsections = []
-    
-    for sample_subsections in subsections_batch:
-        sample_encoded = []
-        for subsection_tokens in sample_subsections:
-            # Ensure subsection is on the correct device
-            if isinstance(subsection_tokens, torch.Tensor):
-                subsection_tokens = subsection_tokens.to(device)
-            
-            # Encode the subsection
-            encoded_subsection = model.encode_text(subsection_tokens.unsqueeze(0))  # Add batch dimension
-            sample_encoded.append(encoded_subsection.squeeze(0))  # Remove batch dimension
-        
-        batch_encoded_subsections.append(sample_encoded)
-    
-    return batch_encoded_subsections
 
 def weighted_contrastive_loss_subsections(image_features, text_subsections_batch, temperature=0.07):
     """
@@ -235,31 +207,6 @@ def mod_77_long_clip_loss(model, image_embedding, long_subsections_batch, short_
     
     return total_loss
 
-def prepare_subsections_batch(subsections_data, tokenizer, device):
-    """
-    Prepare a batch of subsections for training.
-    
-    Args:
-        subsections_data: List of subsection lists for each sample in the batch
-        tokenizer: Text tokenizer
-        device: Device to run on
-    
-    Returns:
-        List of lists of tokenized subsections
-    """
-    batch_subsections = []
-    
-    for sample_subsections in subsections_data:
-        tokenized_subsections = []
-        for subsection_text in sample_subsections:
-            # Tokenize the subsection
-            tokenized = tokenizer(subsection_text)
-            if isinstance(tokenized, torch.Tensor):
-                tokenized = tokenized.to(device)
-            tokenized_subsections.append(tokenized)
-        batch_subsections.append(tokenized_subsections)
-    
-    return batch_subsections
 
 def validate_subsection_weights():
     """
@@ -280,3 +227,113 @@ if __name__ == "__main__":
     print("- 3rd subsection: Less important (weight = 1)")
     print("- 4th+ subsections: Exponentially decreasing importance")
     print("- All weights are normalized to maintain loss scale")
+
+
+def encode_text_subsections_batch(model, tokenizer, long_splitted_captions, device):
+    """
+    Encode multiple text subsections for a batch of samples using batch processing.
+    This function matches the approach used in train.py.
+    
+    Args:
+        model: The CLIP model
+        tokenizer: Text tokenizer
+        long_splitted_captions: List of lists, where each inner list contains text subsections for one sample
+        device: Device to run on
+    
+    Returns:
+        List of tensors, each containing encoded features for subsections of one sample
+    """
+    # Flatten all subsections from all samples in the batch
+    all_subsections = []
+    subsection_counts = []  # Track how many subsections each sample has
+    
+    for sample_subsections in long_splitted_captions:
+        subsection_counts.append(len(sample_subsections))
+        all_subsections.extend(sample_subsections)  # Flatten to single list
+    
+    if not all_subsections:
+        return []
+    
+    # Tokenize all subsections at once
+    tokenized_subsections = tokenizer(all_subsections).to(device)
+    
+    # Encode all subsections
+    text_subsection_features = model.encode_text(tokenized_subsections)
+    
+    # Reshape back to per-sample structure for loss calculation
+    # Split the features back according to subsection_counts
+    subsection_features_per_sample = []
+    start_idx = 0
+    for count in subsection_counts:
+        end_idx = start_idx + count
+        sample_features = text_subsection_features[start_idx:end_idx]
+        subsection_features_per_sample.append(sample_features)
+        start_idx = end_idx
+    
+    return subsection_features_per_sample
+
+def prepare_subsections_batch_optimized(long_splitted_captions, tokenizer, device):
+    """
+    Prepare a batch of subsections for training using optimized batch processing.
+    This function is now redundant since tokenization is handled in encode_text_subsections_batch,
+    but kept for compatibility.
+    
+    Args:
+        long_splitted_captions: List of subsection lists for each sample in the batch
+        tokenizer: Text tokenizer
+        device: Device to run on
+    
+    Returns:
+        Tuple of (all_subsections_flat, subsection_counts)
+    """
+    # Flatten all subsections from all samples
+    all_subsections = []
+    subsection_counts = []
+    
+    for sample_subsections in long_splitted_captions:
+        subsection_counts.append(len(sample_subsections))
+        all_subsections.extend(sample_subsections)
+    
+    return all_subsections, subsection_counts
+
+def process_batch_subsections(model, tokenizer, long_splitted_captions, device):
+    """
+    Complete pipeline to process batch subsections - tokenize, encode, and restructure.
+    This is the main function that replicates the logic from train.py.
+    
+    Args:
+        model: The CLIP model
+        tokenizer: Text tokenizer
+        long_splitted_captions: List of lists containing text subsections for each sample
+        device: Device to run on
+    
+    Returns:
+        List of tensors containing encoded features for each sample's subsections
+    """
+    # Step 1: Flatten all subsections
+    all_subsections = []
+    subsection_counts = []
+    
+    for sample_subsections in long_splitted_captions:
+        subsection_counts.append(len(sample_subsections))
+        all_subsections.extend(sample_subsections)
+    
+    if not all_subsections:
+        return []
+    
+    # Step 2: Tokenize all subsections at once
+    tokenized_subsections = tokenizer(all_subsections).to(device)
+    
+    # Step 3: Encode all subsections
+    text_subsection_features = model.encode_text(tokenized_subsections)
+    
+    # Step 4: Reshape back to per-sample structure
+    subsection_features_per_sample = []
+    start_idx = 0
+    for count in subsection_counts:
+        end_idx = start_idx + count
+        sample_features = text_subsection_features[start_idx:end_idx]
+        subsection_features_per_sample.append(sample_features)
+        start_idx = end_idx
+    
+    return subsection_features_per_sample

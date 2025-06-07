@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from IPython.display import clear_output
 import time
 import torch.nn.functional as F
-from .mod_77_token_training import mod_77_long_clip_loss, prepare_subsections_batch, encode_text_subsections
+from functions.mod_77_token_training import mod_77_long_clip_loss, prepare_subsections_batch, encode_text_subsections
+import copy
 
 def get_positional_embedding(model, lambda2: int = 4):
     """
@@ -146,7 +147,14 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # duplicate the model to avoid modifying the original
-    model = model.copy()
+    # FIXED: Proper way to copy a PyTorch model
+
+    try:
+        model = copy.deepcopy(model)
+        print("✓ Model successfully deep copied")
+    except Exception as e:
+        print(f"⚠ Warning: Could not deep copy model ({e}). Using original model.")
+        # Use original model directly
     model = model.to(device)
     
     # Initialize tracking lists
@@ -164,7 +172,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
     
     # Check if dataset supports mod 77 token training
     sample_batch = next(iter(train_loader))
-    has_subsections = 'subsections' in sample_batch or 'long_subsections' in sample_batch
+    has_subsections = 'long_splitted_captions' in sample_batch 
     
     if use_mod_77 and has_subsections:
         print("Using mod 77 token training with subsections...")
@@ -200,22 +208,28 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             image_features = model.encode_image(images)
             text_features_short = model.encode_text(short_captions)
             
-            if training_mode == "mod_77" and 'subsections' in batch_data:
-                # Use mod 77 token training with subsections
-                long_splitted_captions = batch_data['long_splitted_captions'] if 'long_splitted_captions' in batch_data else None 
+            # Alternative approach using the helper function:
+            if training_mode == "mod_77" and 'long_splitted_captions' in batch_data:
+                # Use the helper function for cleaner code
+
                 
-                # Prepare subsections batch
-                subsections_batch = prepare_subsections_batch(long_splitted_captions, tokenizer, device)
+                long_splitted_captions = batch_data['long_splitted_captions']
                 
-                # Encode subsections
-                text_subsections_batch = encode_text_subsections(model, subsections_batch, device)
+                # Process all subsections efficiently
+                subsection_features_per_sample = process_batch_subsections(
+                    model, tokenizer, long_splitted_captions, device
+                )
                 
-                # Calculate mod 77 loss
-                loss = mod_77_long_clip_loss(model, image_features, text_subsections_batch, text_features_short)
-                
+                if subsection_features_per_sample:
+                    # Calculate mod 77 loss
+                    loss = mod_77_long_clip_loss(model, image_features, subsection_features_per_sample, text_features_short)
+                else:
+                    # Fallback to standard training if no subsections
+                    text_features_long = model.encode_text(long_captions)
+                    loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
             else:
                 # Standard training
-                long_captions = tokenizer(batch_data['long_caption']).to(device)
+                long_captions = tokenizer(batch_data['long_captions']).to(device)
                 text_features_long = model.encode_text(long_captions)
                 
                 # Calculate standard loss
@@ -307,7 +321,7 @@ def validate_model(model, test_loader, device, tokenizer=None, use_mod_77=True):
                 loss = mod_77_long_clip_loss(model, image_features, text_subsections_batch, text_features_short)
             else:
                 # Standard validation
-                long_captions = tokenizer(batch_data['long_caption']).to(device)
+                long_captions = tokenizer(batch_data['long_captions']).to(device)
                 text_features_long = model.encode_text(long_captions)
                 loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
             
