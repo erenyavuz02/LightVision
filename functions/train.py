@@ -145,6 +145,8 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
         use_mod_77: Whether to use mod 77 token training logic
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # duplicate the model to avoid modifying the original
+    model = model.copy()
     model = model.to(device)
     
     # Initialize tracking lists
@@ -190,6 +192,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             images = batch_data['images'].to(device)  
             short_captions = tokenizer(batch_data['short_captions']).to(device)
             long_captions = tokenizer(batch_data['long_captions']).to(device)
+       
 
             optimizer.zero_grad()
 
@@ -199,10 +202,10 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             
             if training_mode == "mod_77" and 'subsections' in batch_data:
                 # Use mod 77 token training with subsections
-                subsections_data = batch_data['subsections']
+                long_splitted_captions = batch_data['long_splitted_captions'] if 'long_splitted_captions' in batch_data else None 
                 
                 # Prepare subsections batch
-                subsections_batch = prepare_subsections_batch(subsections_data, tokenizer, device)
+                subsections_batch = prepare_subsections_batch(long_splitted_captions, tokenizer, device)
                 
                 # Encode subsections
                 text_subsections_batch = encode_text_subsections(model, subsections_batch, device)

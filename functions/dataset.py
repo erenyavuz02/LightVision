@@ -8,6 +8,7 @@ import random
 import numpy as np
 from PIL import Image
 import torch
+from .meaningful_subsections import divide_into_meaningful_subsections
 
 class DatasetDownloader:
     """A class to handle dataset downloading and extraction operations."""
@@ -148,7 +149,7 @@ class DatasetDownloader:
 class CustomDataset(Dataset):
     """Dataset class for loading images and captions with train/test splitting"""
     
-    def __init__(self, config, test_ratio=0.125, transform=None, device=None, force_resplit=False):
+    def __init__(self, config, test_ratio=0.125, transform=None, device=None, force_resplit=False, tokenizer=None):
         """
         Initialize the CustomDataset
         
@@ -169,7 +170,10 @@ class CustomDataset(Dataset):
         self.images_dir = os.path.join(project_root, 'data', 'Images')
         self.captions_file = os.path.join(project_root, 'data', 'custom_captions.json')
         self.split_cache_file = os.path.join(project_root, 'data', 'dataset_split_cache.json')
-        
+
+        # Initialize tokenizer
+        self.tokenizer = tokenizer
+
         # Load and split data
         self._load_and_split_data(force_resplit)
         
@@ -409,7 +413,8 @@ class CustomDataset(Dataset):
             'image_names': [item['image_name'] for item in batch],
             'image_paths': [item['image_path'] for item in batch],
             'short_captions': [item['short_caption'] for item in batch],
-            'long_captions': [item['long_caption'] for item in batch]
+            'long_captions': [item['long_caption'] for item in batch],
+            'long_splitted_captions': [item['long_splitted_captions'] for item in batch]  # List of split captions
         }
 
 
@@ -448,11 +453,19 @@ class TrainTestSubset:
                 image = self.parent_dataset.transform(image)
             if isinstance(image, torch.Tensor) and self.parent_dataset.device:
                 image = image.to(self.parent_dataset.device)
+                
+        # Split long caption into subsections
+        
+        
+        long_caption = item['long_caption']
+        long_splitted_captions = divide_into_meaningful_subsections(long_caption, max_tokens=77)
+        
         
         return {
             'image': image,
             'image_name': item['image_name'],
             'image_path': item['image_path'],
             'short_caption': item['short_caption'],
-            'long_caption': item['long_caption']
+            'long_caption': item['long_caption'],
+            'long_splitted_captions': long_splitted_captions # List of split captions
         }
