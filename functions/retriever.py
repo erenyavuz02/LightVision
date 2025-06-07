@@ -241,9 +241,7 @@ class FAISSRetriever:
         if len(caption_list) == 1:
             return self.retrieve(caption_list[0], k)
         
-        print(f"Processing {len(caption_list)} caption subsections")
-        for i, caption in enumerate(caption_list, 1):
-            print(f"  Caption {i}: {caption[:100]}...")
+        
         
         # Calculate weights for subsections (same logic as training)
         weights = self._calculate_subsection_weights(len(caption_list))
@@ -253,7 +251,6 @@ class FAISSRetriever:
         candidate_info = {}    # image_index -> image_info
         
         for caption_idx, (caption, weight) in enumerate(zip(caption_list, weights)):
-            print(f"Processing caption {caption_idx + 1} with weight {weight:.3f}")
             
             # Retrieve top candidates for this caption
             caption_results = self.retrieve(caption, initial_k)

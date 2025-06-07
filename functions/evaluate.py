@@ -76,11 +76,11 @@ def evaluate_retrieval(config, retriever, dataset, split='test', k_values=[1, 5,
             if target_image_name in top_k_images:
                 long_caption_results[k] += 1
 
-        sub_captions = item.get('long_splitted_captions', [])
-        sub_caption_results = retriever.retrieve_with_subsections(sub_captions, k=max(k_values), initial_k=config.get('retriever.initial_k', 20))
+        sub_captions = item.get('long_splitted_caption', [])
+        sub_results = retriever.retrieve_with_subsections(sub_captions, k=max(k_values), initial_k=config.get('retriever.initial_k', 20))
         
         for k in k_values:
-            top_k_images = [result['image_name'] for result in sub_caption_results[:k]]
+            top_k_images = [result['image_name'] for result in sub_results[:k]]
             if target_image_name in top_k_images:
                 sub_caption_results[k] += 1
 
@@ -90,7 +90,7 @@ def evaluate_retrieval(config, retriever, dataset, split='test', k_values=[1, 5,
                 'long_caption': long_caption,
                 'short_results': short_results[:5],  # Return top 5 for sample
                 'long_results': long_results[:5],
-                'sub_results': sub_caption_results[:5]
+                'sub_results': sub_results[:5]
             }
 
     # Calculate final metrics
