@@ -167,8 +167,8 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
     model = apply_positional_embedding_modification(model, lambda2=4)
     
     # Step 2: Load and split dataset
-    train_loader = dataset.get_dataloader("train")
-    test_loader = dataset.get_dataloader("test")
+    train_loader = dataset.get_dataloader("train", batch_size=batch_size, shuffle=True)
+    test_loader = dataset.get_dataloader("test" , batch_size=batch_size, shuffle=False)
     
     # Check if dataset supports mod 77 token training
     sample_batch = next(iter(train_loader))
