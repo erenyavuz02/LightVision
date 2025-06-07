@@ -68,6 +68,7 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
         long_caption = item['long_caption']
         long_results = retriever.retrieve(long_caption, k=max(k_values))
         
+        
         # Check if target image is in top-k for each k
         for k in k_values:
             top_k_images = [result['image_name'] for result in long_results[:k]]

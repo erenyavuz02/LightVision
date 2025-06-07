@@ -168,7 +168,7 @@ class CustomDataset(Dataset):
         # Get paths from config
         project_root = config.get('project.root', '.')
         self.images_dir = os.path.join(project_root, 'data', 'Images')
-        self.captions_file = os.path.join(project_root, 'data', 'custom_captions.json')
+        self.captions_file = os.path.join(project_root, 'data', config.get('dataset.captions_file', 'captions.json'))
         self.split_cache_file = os.path.join(project_root, 'data', 'dataset_split_cache.json')
 
         # Initialize tokenizer
