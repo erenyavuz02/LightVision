@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from IPython.display import clear_output
 import time
 import torch.nn.functional as F
-from functions.mod_77_token_training import mod_77_long_clip_loss, prepare_subsections_batch, encode_text_subsections
+from functions.mod_77_token_training import mod_77_long_clip_loss, process_batch_subsections
 import copy
 
 def get_positional_embedding(model, lambda2: int = 4):
@@ -316,8 +316,7 @@ def validate_model(model, test_loader, device, tokenizer=None, use_mod_77=True):
             if training_mode == "mod_77" and 'subsections' in batch_data:
                 # Use mod 77 validation
                 subsections_data = batch_data['subsections']
-                subsections_batch = prepare_subsections_batch(subsections_data, tokenizer, device)
-                text_subsections_batch = encode_text_subsections(model, subsections_batch, device)
+                text_subsections_batch = process_batch_subsections(model, tokenizer, subsections_data, device)
                 loss = mod_77_long_clip_loss(model, image_features, text_subsections_batch, text_features_short)
             else:
                 # Standard validation
