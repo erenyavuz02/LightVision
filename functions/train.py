@@ -278,8 +278,8 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             }, 'best_model.pth')
             print(f"  ✓ Best model saved! (Val Loss: {val_loss:.4f})")
         
-        # Plot training progress
-        if (epoch + 1) % 2 == 0 or epoch == 0:
+        # Plot training progress at the very end
+        if epoch == num_epochs - 1:
             plot_training_progress(epochs_list, train_losses, val_losses)
         
         print("-" * 50)
@@ -333,7 +333,7 @@ def plot_training_progress(epochs, train_losses, val_losses):
     """
     Plot training and validation losses in real-time.
     """
-    clear_output(wait=True)
+    
     
     plt.figure(figsize=(12, 4))
     
