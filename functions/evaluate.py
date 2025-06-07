@@ -13,7 +13,7 @@ def calculate_recall_at_k(true_positives, total_queries, k_values=[1, 5, 10]):
         recalls[f'recall@{k}'] = true_positives.get(k, 0) / total_queries if total_queries > 0 else 0.0
     return recalls
 
-def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], verbose=True):
+def evaluate_retrieval(config, retriever, dataset, split='test', k_values=[1, 5, 10], verbose=True):
     """
     Evaluate retrieval performance using Recall@K metrics
     
@@ -39,6 +39,7 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
     # Initialize counters for different caption types
     short_caption_results = {k: 0 for k in k_values}
     long_caption_results = {k: 0 for k in k_values}
+    sub_caption_results = {k: 0 for k in k_values}  # For sub-captions if needed
     
     total_queries = len(data)
     
@@ -74,29 +75,40 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
             top_k_images = [result['image_name'] for result in long_results[:k]]
             if target_image_name in top_k_images:
                 long_caption_results[k] += 1
-                
+
+        sub_captions = item.get('long_splitted_captions', [])
+        sub_caption_results = retriever.retrieve_sub_captions(sub_captions, k=max(k_values), initial_k=config.get('retriever.initial_k', 20))
+        
+        for k in k_values:
+            top_k_images = [result['image_name'] for result in sub_caption_results[:k]]
+            if target_image_name in top_k_images:
+                sub_caption_results[k] += 1
+
         if idx == 0:
             sample_return = {
                 'short_caption': short_caption,
                 'long_caption': long_caption,
                 'short_results': short_results[:5],  # Return top 5 for sample
-                'long_results': long_results[:5]
+                'long_results': long_results[:5],
+                'sub_results': sub_caption_results[:5]
             }
-    
+
     # Calculate final metrics
     short_recalls = calculate_recall_at_k(short_caption_results, total_queries, k_values)
     long_recalls = calculate_recall_at_k(long_caption_results, total_queries, k_values)
-    
+    sub_recalls = calculate_recall_at_k(sub_caption_results, total_queries, k_values)
+
     # Calculate average recalls
     avg_recalls = {}
     for k in k_values:
-        avg_recalls[f'recall@{k}'] = (short_recalls[f'recall@{k}'] + long_recalls[f'recall@{k}']) / 2
+        avg_recalls[f'recall@{k}'] = (short_recalls[f'recall@{k}'] + long_recalls[f'recall@{k}'] + sub_recalls[f'recall@{k}']) / 3
     
     results = {
         'split': split,
         'total_queries': total_queries,
         'short_caption_recalls': short_recalls,
         'long_caption_recalls': long_recalls,
+        'sub_caption_recalls': sub_recalls,
         'average_recalls': avg_recalls,
         'k_values': k_values
     }
@@ -113,7 +125,10 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
         print("\nAverage Results:")
         for k in k_values:
             print(f"  Recall@{k}: {avg_recalls[f'recall@{k}']:.4f}")
-    
+        print("\nSub Caption Results:")
+        for k in k_values:
+            print(f"  Recall@{k}: {sub_recalls[f'recall@{k}']:.4f}")
+
     return results, sample_return
 
 def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, k_values=[1, 5, 10], 
@@ -177,6 +192,7 @@ def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, 
         
         # Evaluate retrieval performance
         split_results, sample_result = evaluate_retrieval(
+            config,
             retriever, testDataset, split=split, 
             k_values=k_values, verbose=verbose
         )
