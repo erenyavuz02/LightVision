@@ -116,7 +116,7 @@ def evaluate_retrieval(retriever, dataset, split='test', k_values=[1, 5, 10], ve
     return results, sample_return
 
 def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, k_values=[1, 5, 10], 
-                    force_rebuild_index=False, verbose=True):
+                    force_rebuild_index=False, verbose=True, only_test=False):
     """
     Main evaluation function for the dataset
     
@@ -162,7 +162,7 @@ def evaluate_dataset(model=None, testDataset=None, config=None, tokenizer=None, 
     sample_results = []
     
     # Evaluate on both train and test splits
-    for split in ['train', 'test']:
+    for split in ['train', 'test'] if not only_test else ['test']:
         if verbose:
             print(f"\n{'='*50}")
             print(f"Evaluating {split} split")
