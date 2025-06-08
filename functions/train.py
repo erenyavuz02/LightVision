@@ -208,32 +208,26 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             image_features = model.encode_image(images)
             text_features_short = model.encode_text(short_captions)
             
-            # Alternative approach using the helper function:
-            if training_mode == "mod_77" and 'long_splitted_captions' in batch_data:
-                # Use the helper function for cleaner code
+            
 
-                
-                long_splitted_captions = batch_data['long_splitted_captions']
-                
-                # Process all subsections efficiently
+            
+            long_splitted_captions = batch_data['long_splitted_captions']
+            long_captions = tokenizer(batch_data['long_captions']).to(device)
+            
+
+            
+            long_clip_loss = long_clip_loss(model, image_features, subsection_features_per_sample, text_features_short)
+            
+            loss = long_clip_loss
+            
+            text_features_long = model.encode_text(long_captions)
+            if training_mode == 'mod_77':
+                            # Process all subsections efficiently
                 subsection_features_per_sample = process_batch_subsections_vectorized(
                     model, tokenizer, long_splitted_captions, device
                 )
-                
-                if subsection_features_per_sample:
-                    # Calculate mod 77 loss
-                    loss = mod_77_long_clip_loss(model, image_features, subsection_features_per_sample, text_features_short)
-                else:
-                    # Fallback to standard training if no subsections
-                    text_features_long = model.encode_text(long_captions)
-                    loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
-            else:
-                # Standard training
-                long_captions = tokenizer(batch_data['long_captions']).to(device)
-                text_features_long = model.encode_text(long_captions)
-                
-                # Calculate standard loss
-                loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
+                sub_caption_loss = mod_77_long_clip_loss(model, image_features, subsection_features_per_sample)
+                loss = ((loss * 2) + sub_caption_loss) / 3
 
             # Backward pass
             loss.backward()
