@@ -224,9 +224,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             long_splitted_captions = batch_data['long_splitted_captions']
             long_captions = tokenizer(batch_data['long_captions']).to(device)
 
-            long_clip_loss = long_clip_loss(model, image_features, subsection_features_per_sample, text_features_short)
-
-            loss = long_clip_loss
+            loss = long_clip_loss(model, image_features, subsection_features_per_sample, text_features_short)
 
             text_features_long = model.encode_text(long_captions)
             if use_mod_77 :
