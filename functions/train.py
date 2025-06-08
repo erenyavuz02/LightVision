@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from IPython.display import clear_output
 import time
 import torch.nn.functional as F
-from functions.mod_77_token_training import mod_77_long_clip_loss, process_batch_subsections, process_batch_subsections_vectorized
+from functions.mod_77_token_training import mod_77_long_clip_loss, process_batch_subsections_vectorized
 import copy
 
 def get_positional_embedding(model, lambda2: int = 4):
