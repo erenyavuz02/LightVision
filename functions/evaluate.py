@@ -45,6 +45,8 @@ def evaluate_retrieval(config, retriever, dataset, split='test', k_values=[1, 5,
     
     sample_return = None  # For returning a sample query and results
     
+    initial_k = total_queries
+    
     if verbose:
         print(f"Processing {total_queries} queries...")
     
@@ -75,6 +77,9 @@ def evaluate_retrieval(config, retriever, dataset, split='test', k_values=[1, 5,
             top_k_images = [result['image_name'] for result in long_results[:k]]
             if target_image_name in top_k_images:
                 long_caption_results[k] += 1
+
+        
+
 
         sub_captions = item.get('long_splitted_caption', [])
         sub_results = retriever.retrieve_with_subsections(sub_captions, k=max(k_values), initial_k=config.get('retriever.initial_k', 20))
