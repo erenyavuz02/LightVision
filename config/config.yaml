@@ -1,15 +1,13 @@
 custom_caption:
   path: data/custom_captions.json
 dataset:
-  captions_csv_filename: captions.txt
-  captions_file: all_captions.json
-  description: A dataset of 8,000 images with captions.
-  download_url: https://www.kaggle.com/api/v1/datasets/download/adityajn105/flickr8k
-  images_folder_name: Images
-  name: Flickr8k
+  captions_file: frankenstein_captions.json
+  description: COCO-2017 dataset for image captioning
+  download_url: https://www.kaggle.com/api/v1/datasets/download/awsaf49/coco-2017-dataset
+  images_folder_name: COCO-2017
+  name: COCO-2017
   output_folder_name: output
-  url: https://www.kaggle.com/adityajn105/flickr8k
-  zip_filename: flickr8k.zip
+  zip_filename: coco-2017-dataset.zip
 model:
   base_model_path: checkpoints/mobileclip_s0.pt
   checkpoint_dir: checkpoints

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from IPython.display import clear_output
 import time
 import torch.nn.functional as F
-from functions.mod_77_token_training import mod_77_long_clip_loss, process_batch_subsections
+from functions.mod_77_token_training import mod_77_long_clip_loss, process_batch_subsections, process_batch_subsections_vectorized
 import copy
 
 def get_positional_embedding(model, lambda2: int = 4):
@@ -216,7 +216,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
                 long_splitted_captions = batch_data['long_splitted_captions']
                 
                 # Process all subsections efficiently
-                subsection_features_per_sample = process_batch_subsections(
+                subsection_features_per_sample = process_batch_subsections_vectorized(
                     model, tokenizer, long_splitted_captions, device
                 )
                 
