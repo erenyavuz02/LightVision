@@ -24,7 +24,7 @@ def calculate_subsection_weights(num_subsections: int) -> list:
     return weights
 
 
-def mod_77_long_clip_loss(model, image_embedding, long_subsections_batch, short_embedding, temperature=0.07):
+def mod_77_long_clip_loss(model, image_embedding, long_subsections_batch, temperature=0.07):
     """
     Modified LongCLIP loss that handles subsections with weighted importance.
     
@@ -32,9 +32,8 @@ def mod_77_long_clip_loss(model, image_embedding, long_subsections_batch, short_
         model: The CLIP model
         image_embedding: Image embeddings [batch_size, embed_dim]
         long_subsections_batch: List of lists containing long text subsections for each sample
-        short_embedding: Short text embeddings [batch_size, embed_dim]
         temperature: Temperature parameter
-    
+
     Returns:
         Combined weighted loss
     """
