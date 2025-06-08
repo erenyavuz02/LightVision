@@ -131,7 +131,7 @@ def long_clip_loss(model, image_embedding, long_embedding, short_embedding):
     return total_loss
 
 
-def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_rate=1e-4, tokenizer=None, use_mod_77=True):
+def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_rate=1e-4, tokenizer=None, training_mode = 'standard', use_mod_77=True):
     """
     Train the model with positional embedding modification and custom dataset.
     
@@ -143,6 +143,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
         batch_size: Batch size for training
         learning_rate: Learning rate for optimizer
         tokenizer: Text tokenizer
+        training_mode: Training mode, 'standard' , 'randomized'
         use_mod_77: Whether to use mod 77 token training logic
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -174,12 +175,6 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
     sample_batch = next(iter(train_loader))
     has_subsections = 'long_splitted_captions' in sample_batch 
     
-    if use_mod_77 and has_subsections:
-        print("Using mod 77 token training with subsections...")
-        training_mode = "mod_77"
-    else:
-        print("Using standard training...")
-        training_mode = "standard"
     
     # Step 3: Setup optimizer
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
@@ -199,8 +194,24 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
 
             images = batch_data['images'].to(device)  
             short_captions = tokenizer(batch_data['short_captions']).to(device)
-            long_captions = tokenizer(batch_data['long_captions']).to(device)
-       
+            long_captions_batch = batch_data['long_captions']
+            
+            if training_mode == 'randomized':
+                # Randomly select subsections for each sample
+                long_splitted_captions = batch_data['long_splitted_captions']
+                
+                for i, subsections in enumerate(long_splitted_captions):
+                    # Select subsection based on length-weighted probability
+                    subsection_lengths = [len(subsection.split()) for subsection in subsections]
+                    total_length = sum(subsection_lengths)
+                    
+                    # Calculate probabilities based on length
+                    probabilities = [length / total_length for length in subsection_lengths]
+                    # Select based on weighted probability
+                    selected_idx = np.random.choice(len(subsections), p=probabilities)
+                    long_captions_batch[i] = subsections[selected_idx]
+
+            long_captions = tokenizer(long_captions_batch).to(device)
 
             optimizer.zero_grad()
 
@@ -208,21 +219,15 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             image_features = model.encode_image(images)
             text_features_short = model.encode_text(short_captions)
             
-            
-
-            
             long_splitted_captions = batch_data['long_splitted_captions']
             long_captions = tokenizer(batch_data['long_captions']).to(device)
-            
 
-            
             long_clip_loss = long_clip_loss(model, image_features, subsection_features_per_sample, text_features_short)
-            
+
             loss = long_clip_loss
-            
+
             text_features_long = model.encode_text(long_captions)
-            if training_mode == 'mod_77':
-                            # Process all subsections efficiently
+            if use_mod_77 :
                 subsection_features_per_sample = process_batch_subsections_vectorized(
                     model, tokenizer, long_splitted_captions, device
                 )
