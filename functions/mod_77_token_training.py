@@ -5,41 +5,24 @@ import math
 def calculate_subsection_weights(num_subsections: int) -> list:
     """
     Calculate weights for subsections based on their importance.
-    First subsection gets highest weight, subsequent ones follow squared importance decay.
+    First subsection gets weight of 1, second gets 1/2, third gets 1/3, etc.
     
     Args:
         num_subsections: Number of subsections
     
     Returns:
-        List of weights for each subsection (normalized to sum to 1.0)
+        List of weights for each subsection (fixed weights, not normalized)
     """
     if num_subsections == 1:
         return [1.0]
     
     weights = []
     for i in range(num_subsections):
-        if i == 0:
-            # First subsection gets weight of 9
-            weight = 9.0
-        elif i == 1:
-            # Second subsection gets weight of 4
-            weight = 4.0
-        elif i == 2:
-            # Third subsection gets weight of 1
-            weight = 1.0
-        else:
-            # For subsections beyond 3, continue with decreasing squared importance
-            # Following pattern: 9, 4, 1, 0.25, 0.0625, etc.
-            weight = 1.0 / (4 ** (i - 2))
-    
+        # Weight = 1 / (position + 1)
+        weight = 1.0 / (i + 1)
         weights.append(weight)
     
-    # Normalize weights so they sum to 1.0
-    # This ensures each sample contributes equally to the loss regardless of subsection count
-    weight_sum = sum(weights)
-    normalized_weights = [w / weight_sum for w in weights]
-    
-    return normalized_weights
+    return weights
 
 
 def weighted_contrastive_loss_subsections(image_features, text_subsections_batch, temperature=0.07):
