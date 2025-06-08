@@ -160,6 +160,8 @@ class CustomDataset(Dataset):
             device: torch device to load images to (cuda/cpu)
             force_resplit: Force recreation of the split even if it exists
         """
+        print("🔧 Initializing CustomDataset...")
+        
         self.config = config
         self.test_ratio = test_ratio
         self.transform = transform
@@ -171,17 +173,34 @@ class CustomDataset(Dataset):
         self.captions_file = os.path.join(project_root, 'data', config.get('dataset.captions_file', 'captions.json'))
         self.split_cache_file = os.path.join(project_root, 'data', 'dataset_split_cache.json')
 
+        print(f"📁 Images directory: {self.images_dir}")
+        print(f"📄 Captions file: {self.captions_file}")
+        print(f"💾 Split cache file: {self.split_cache_file}")
+        print(f"🎯 Device: {self.device}")
+        print(f"📊 Test ratio: {test_ratio}")
+
         # Initialize tokenizer
         self.tokenizer = tokenizer
 
         # Load and split data
         self._load_and_split_data(force_resplit)
         
+        # Print final statistics
+        print("\n📈 Dataset Statistics:")
+        stats = self.get_statistics('both')
+        print(f"   Total samples: {stats['total']['total_samples']}")
+        print(f"   Train samples: {stats['train']['total_samples']}")
+        print(f"   Test samples: {stats['test']['total_samples']}")
+        print(f"   Short caption avg length: {stats['total']['short_captions']['avg_length']:.1f} words")
+        print(f"   Long caption avg length: {stats['total']['long_captions']['avg_length']:.1f} words")
+        print("✅ Dataset initialization complete!\n")
+        
     def _create_split(self, all_captions, force_resplit=False):
         """Create or load the train/test split"""
         
         # Check if we can load existing split
         if not force_resplit and os.path.exists(self.split_cache_file):
+            print("🔍 Checking for existing split cache...")
             try:
                 with open(self.split_cache_file, 'r') as f:
                     cached_split = json.load(f)
@@ -193,11 +212,15 @@ class CustomDataset(Dataset):
                     self.train_images = set(cached_split['train_images'])
                     self.test_images = set(cached_split['test_images'])
                     self.split_metadata = cached_split
+                    print("✅ Loaded existing split from cache")
                     return
-            except Exception:
-                pass  # Create new split if loading fails
+                else:
+                    print("⚠️  Cached split incompatible, creating new split...")
+            except Exception as e:
+                print(f"⚠️  Failed to load cached split: {e}")
         
         # Create new split
+        print("🔄 Creating new train/test split...")
         all_image_names = list(all_captions.keys())
         
         # Create reproducible split
@@ -211,6 +234,9 @@ class CustomDataset(Dataset):
         # Split the data
         self.test_images = set(all_image_names[:test_size])
         self.train_images = set(all_image_names[test_size:])
+        
+        print(f"   Train set: {len(self.train_images)} images")
+        print(f"   Test set: {len(self.test_images)} images")
         
         # Create metadata
         self.split_metadata = {
@@ -227,11 +253,14 @@ class CustomDataset(Dataset):
         try:
             with open(self.split_cache_file, 'w') as f:
                 json.dump(self.split_metadata, f, indent=2)
-        except Exception:
-            pass  # Continue if can't save cache
+            print("💾 Split cache saved successfully")
+        except Exception as e:
+            print(f"⚠️  Failed to save split cache: {e}")
         
     def _load_and_split_data(self, force_resplit=False):
         """Load captions and create train/test split"""
+        
+        print("📖 Loading captions from JSON file...")
         
         # Load captions from JSON file
         if not os.path.exists(self.captions_file):
@@ -240,13 +269,30 @@ class CustomDataset(Dataset):
         with open(self.captions_file, 'r') as f:
             all_captions = json.load(f)
         
+        print(f"   Found {len(all_captions)} entries in captions file")
+        
+        # Check if images directory exists
+        if not os.path.exists(self.images_dir):
+            raise FileNotFoundError(f"Images directory not found: {self.images_dir}")
+        
+        # Get count of actual image files in directory
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+        actual_images = [f for f in os.listdir(self.images_dir) 
+                        if os.path.splitext(f.lower())[1] in image_extensions]
+        print(f"   Found {len(actual_images)} image files in directory")
+        
         # Filter to only include images that exist and have both caption types
+        print("🔍 Filtering valid image-caption pairs...")
         self.valid_captions = {}
+        missing_images = 0
+        missing_captions = 0
+        
         for image_name, captions in all_captions.items():
             image_path = os.path.join(self.images_dir, image_name)
             
             # Check if image exists
             if not os.path.exists(image_path):
+                missing_images += 1
                 continue
                 
             # Extract captions based on the JSON structure
@@ -273,6 +319,14 @@ class CustomDataset(Dataset):
                     'short_caption': short_caption.strip(),
                     'long_caption': long_caption.strip()
                 }
+            else:
+                missing_captions += 1
+        
+        print(f"   ✅ Valid pairs: {len(self.valid_captions)}")
+        if missing_images > 0:
+            print(f"   ⚠️  Missing images: {missing_images}")
+        if missing_captions > 0:
+            print(f"   ⚠️  Missing captions: {missing_captions}")
         
         if not self.valid_captions:
             raise ValueError("No valid image-caption pairs found")
@@ -280,7 +334,12 @@ class CustomDataset(Dataset):
         # Create split
         self._create_split(self.valid_captions, force_resplit)
         
+        # Verify no overlap
+        if self.verify_no_overlap():
+            print("✅ Split verification passed - no overlap between train/test")
+        
         # Prepare data for both splits
+        print("🔄 Preparing split data...")
         self._prepare_split_data()
     
     def _prepare_split_data(self):
@@ -301,6 +360,9 @@ class CustomDataset(Dataset):
                 self.train_data.append(item)
             elif image_name in self.test_images:
                 self.test_data.append(item)
+        
+        print(f"   Train data prepared: {len(self.train_data)} items")
+        print(f"   Test data prepared: {len(self.test_data)} items")
     
     def get_split_info(self):
         """Get information about the current split"""
