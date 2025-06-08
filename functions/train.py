@@ -220,13 +220,12 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             # Forward pass
             image_features = model.encode_image(images)
             text_features_short = model.encode_text(short_captions)
+            text_features_long = model.encode_text(long_captions)
             
             long_splitted_captions = batch_data['long_splitted_captions']
-            long_captions = tokenizer(batch_data['long_captions']).to(device)
 
-            loss = long_clip_loss(model, image_features, subsection_features_per_sample, text_features_short)
+            loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
 
-            text_features_long = model.encode_text(long_captions)
             if use_mod_77 :
                 subsection_features_per_sample = process_batch_subsections_vectorized(
                     model, tokenizer, long_splitted_captions, device
