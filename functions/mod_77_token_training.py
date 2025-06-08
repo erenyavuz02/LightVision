@@ -18,29 +18,14 @@ def calculate_subsection_weights(num_subsections: int) -> list:
     
     weights = []
     for i in range(num_subsections):
-        if i == 0:
-            # First subsection gets weight of 9
-            weight = 9.0
-        elif i == 1:
-            # Second subsection gets weight of 4
-            weight = 4.0
-        elif i == 2:
-            # Third subsection gets weight of 1
-            weight = 1.0
-        else:
-            # For subsections beyond 3, continue with decreasing squared importance
-            # Following pattern: 9, 4, 1, 0.25, 0.0625, etc.
-            weight = 1.0 / (4 ** (i - 2))
-    
+        weight = 1 / num_subsections  # Base weight for all subsections
         weights.append(weight)
     
-    # Normalize weights so they sum to 1.0
-    # This ensures each sample contributes equally to the loss regardless of subsection count
-    weight_sum = sum(weights)
-    normalized_weights = [w / weight_sum for w in weights]
-    
-    return normalized_weights
+    return weights
 
+
+import torch
+import torch.nn.functional as F
 
 def weighted_contrastive_loss_subsections(image_features, text_subsections_batch, temperature=0.07):
     """
@@ -58,11 +43,10 @@ def weighted_contrastive_loss_subsections(image_features, text_subsections_batch
     batch_size = image_features.shape[0]
     device = image_features.device
     
-    # Normalize image features
+    print("\n[DEBUG] Original image features:\n", image_features)
     image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+    print("\n[DEBUG] Normalized image features:\n", image_features)
     
-    # Create similarity matrix by weighting dot products
-    # sim_matrix[i][j] = weighted sum of similarities between image_i and all subsections of text_j
     sim_i2t = torch.zeros(batch_size, batch_size, device=device)
     sim_t2i = torch.zeros(batch_size, batch_size, device=device)
     
@@ -70,51 +54,56 @@ def weighted_contrastive_loss_subsections(image_features, text_subsections_batch
         text_subsections = text_subsections_batch[text_idx]
         num_subsections = len(text_subsections)
         
+        print(f"\n[DEBUG] Processing sample {text_idx}, num_subsections: {num_subsections}")
         
         if num_subsections == 0:
-            # If no subsections, similarity is 0 (shouldn't happen in practice)
             continue
         
-        # Get weights for this text sample's subsections
         weights = calculate_subsection_weights(num_subsections)
+        print(f"[DEBUG] Subsection weights: {weights}")
         
-        # Calculate weighted similarity for this text sample against all images
         for img_idx in range(batch_size):
-            current_image = image_features[img_idx]  # [embed_dim]
-            
-            # Calculate weighted sum of similarities between this image and all subsections
+            current_image = image_features[img_idx]
             weighted_similarity = 0.0
             
             for subsection_idx, subsection_features in enumerate(text_subsections):
-                # Normalize subsection features
                 subsection_features = subsection_features / subsection_features.norm(dim=-1, keepdim=True)
-                
-                # Calculate dot product (similarity score)
                 similarity = torch.dot(current_image, subsection_features)
-                
-                # Apply weight and add to weighted sum
                 weight = weights[subsection_idx]
                 weighted_similarity += weight * similarity
+
+                print(f"[DEBUG] img_idx={img_idx}, text_idx={text_idx}, subsection_idx={subsection_idx}")
+                print(f"        similarity={similarity.item()}, weight={weight}, weighted_contribution={weight * similarity}")
             
-            # Store weighted similarity scores
             sim_i2t[img_idx, text_idx] = weighted_similarity
             sim_t2i[text_idx, img_idx] = weighted_similarity
+            print(f"[DEBUG] sim_i2t[{img_idx}, {text_idx}] = {weighted_similarity.item()}")
     
-    # Apply temperature scaling
+    print("\n[DEBUG] Raw sim_i2t:\n", sim_i2t)
+    print("\n[DEBUG] Raw sim_t2i:\n", sim_t2i)
+
     sim_i2t = sim_i2t / temperature
     sim_t2i = sim_t2i / temperature
-    
-    # Create labels
+
+    print("\n[DEBUG] Scaled sim_i2t:\n", sim_i2t)
+    print("\n[DEBUG] Scaled sim_t2i:\n", sim_t2i)
+
     labels = torch.arange(batch_size, device=device)
-    
-    # Calculate contrastive loss
+    print("\n[DEBUG] Labels:\n", labels)
+
     loss_i2t = F.cross_entropy(sim_i2t, labels)
     loss_t2i = F.cross_entropy(sim_t2i, labels)
-    
-    # Return average of both directions
+
+    print(f"\n[DEBUG] Loss i2t: {loss_i2t.item()}, Loss t2i: {loss_t2i.item()}")
+
     total_loss = (loss_i2t + loss_t2i) / 2
-    
+    print(f"[DEBUG] Total loss: {total_loss.item()}")
+
+    # terminate all code kernel wehatever interrupt
+    raise SystemExit
+
     return total_loss
+
 
 def mod_77_contrastive_loss(model, image_features, text_subsections_batch, temperature=0.07):
     """
