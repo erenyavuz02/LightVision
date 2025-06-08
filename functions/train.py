@@ -251,7 +251,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
         epochs_list.append(epoch + 1)
         
         # Validation
-        val_loss = validate_model(model, test_loader, device, tokenizer, use_mod_77)
+        val_loss = validate_model(model, test_loader, device, tokenizer, use_mod_77, training_mode)
         val_losses.append(val_loss)
         
         # Print epoch summary
