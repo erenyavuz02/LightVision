@@ -149,7 +149,7 @@ class DatasetDownloader:
 class CustomDataset(Dataset):
     """Dataset class for loading images and captions with train/test splitting"""
     
-    def __init__(self, config, test_ratio=0.125, transform=None, device=None, force_resplit=False, tokenizer=None):
+    def __init__(self, config, test_ratio=0.125, transform=None, device=None, force_resplit=True, tokenizer=None):
         """
         Initialize the CustomDataset
         
@@ -167,7 +167,7 @@ class CustomDataset(Dataset):
         
         # Get paths from config
         project_root = config.get('project.root', '.')
-        self.images_dir = os.path.join(project_root, 'data', 'Images')
+        self.images_dir = os.path.join(project_root, 'data', config.get('dataset.images_folder_name', 'Images'))
         self.captions_file = os.path.join(project_root, 'data', config.get('dataset.captions_file', 'captions.json'))
         self.split_cache_file = os.path.join(project_root, 'data', 'dataset_split_cache.json')
 

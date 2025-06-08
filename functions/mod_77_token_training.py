@@ -294,6 +294,9 @@ def weighted_contrastive_loss_subsections_vectorized(image_features, text_subsec
     device = image_features.device
     embed_dim = image_features.shape[1]
     
+    # normalize image features
+    image_features = image_features / image_features.norm(dim=1, keepdim=True)
+    
     # Find maximum number of subsections across all samples
     max_subsections = max(len(subsections) for subsections in text_subsections_batch)
     
@@ -323,7 +326,8 @@ def weighted_contrastive_loss_subsections_vectorized(image_features, text_subsec
         # Fill the vector with subsections at this position
         for sample_idx, subsections in enumerate(text_subsections_batch):
             if subsection_idx < len(subsections):
-                subsection_vector[sample_idx] = subsections[subsection_idx]
+                # normalize subsection feature
+                subsection_vector[sample_idx] = subsections[subsection_idx] / subsections[subsection_idx].norm(dim=0, keepdim=True)
                 mask[sample_idx] = True
             # else: remains zero (missing subsection)
         
@@ -354,7 +358,6 @@ def weighted_contrastive_loss_subsections_vectorized(image_features, text_subsec
         
         # Apply weight and accumulate
         sim_i2t_total += weight * sim_i2t_sub
-
         sim_t2i_total += weight.T * sim_t2i_sub
 
     # Apply temperature scaling
