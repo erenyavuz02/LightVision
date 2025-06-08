@@ -201,13 +201,15 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
                 long_splitted_captions = batch_data['long_splitted_captions']
                 
                 for i, subsections in enumerate(long_splitted_captions):
-                    # Select subsection based on length-weighted probability
-                    subsection_lengths = [len(subsection.split()) for subsection in subsections]
-                    total_length = sum(subsection_lengths)
+                    num_captions = len(subsections)
                     
-                    # Calculate probabilities based on length
-                    probabilities = [length / total_length for length in subsection_lengths]
-                    # Select based on weighted probability
+                    # Calculate probabilities based on position (first caption gets higher probability)
+                    # Using exponential decay: first caption gets highest probability
+                    weights = [np.exp(-0.5 * j) for j in range(num_captions)]
+                    total_weight = sum(weights)
+                    probabilities = [weight / total_weight for weight in weights]
+                    
+                    # Select based on position-weighted probability
                     selected_idx = np.random.choice(len(subsections), p=probabilities)
                     long_captions_batch[i] = subsections[selected_idx]
 

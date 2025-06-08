@@ -4,7 +4,7 @@ dataset:
   captions_file: frankenstein_captions.json
   description: COCO-2017 dataset for image captioning
   download_url: https://www.kaggle.com/api/v1/datasets/download/awsaf49/coco-2017-dataset
-  images_folder_name: COCO-2017
+  images_folder_name: coco2017/train2017
   name: COCO-2017
   output_folder_name: output
   zip_filename: coco-2017-dataset.zip
