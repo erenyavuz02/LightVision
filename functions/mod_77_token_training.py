@@ -24,9 +24,6 @@ def calculate_subsection_weights(num_subsections: int) -> list:
     return weights
 
 
-import torch
-import torch.nn.functional as F
-
 def weighted_contrastive_loss_subsections(image_features, text_subsections_batch, temperature=0.07):
     """
     Calculate contrastive loss using weighted similarity scores between sub-captions and images.
@@ -43,10 +40,6 @@ def weighted_contrastive_loss_subsections(image_features, text_subsections_batch
     batch_size = image_features.shape[0]
     device = image_features.device
     
-    print("\n[DEBUG] Original image features:\n", image_features)
-    image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-    print("\n[DEBUG] Normalized image features:\n", image_features)
-    
     sim_i2t = torch.zeros(batch_size, batch_size, device=device)
     sim_t2i = torch.zeros(batch_size, batch_size, device=device)
     
@@ -54,54 +47,34 @@ def weighted_contrastive_loss_subsections(image_features, text_subsections_batch
         text_subsections = text_subsections_batch[text_idx]
         num_subsections = len(text_subsections)
         
-        print(f"\n[DEBUG] Processing sample {text_idx}, num_subsections: {num_subsections}")
-        
         if num_subsections == 0:
             continue
         
         weights = calculate_subsection_weights(num_subsections)
-        print(f"[DEBUG] Subsection weights: {weights}")
         
         for img_idx in range(batch_size):
             current_image = image_features[img_idx]
             weighted_similarity = 0.0
             
             for subsection_idx, subsection_features in enumerate(text_subsections):
-                subsection_features = subsection_features / subsection_features.norm(dim=-1, keepdim=True)
                 similarity = torch.dot(current_image, subsection_features)
                 weight = weights[subsection_idx]
                 weighted_similarity += weight * similarity
-
-                print(f"[DEBUG] img_idx={img_idx}, text_idx={text_idx}, subsection_idx={subsection_idx}")
-                print(f"        similarity={similarity.item()}, weight={weight}, weighted_contribution={weight * similarity}")
             
             sim_i2t[img_idx, text_idx] = weighted_similarity
             sim_t2i[text_idx, img_idx] = weighted_similarity
-            print(f"[DEBUG] sim_i2t[{img_idx}, {text_idx}] = {weighted_similarity.item()}")
     
-    print("\n[DEBUG] Raw sim_i2t:\n", sim_i2t)
-    print("\n[DEBUG] Raw sim_t2i:\n", sim_t2i)
-
+    # Apply temperature scaling
     sim_i2t = sim_i2t / temperature
     sim_t2i = sim_t2i / temperature
 
-    print("\n[DEBUG] Scaled sim_i2t:\n", sim_i2t)
-    print("\n[DEBUG] Scaled sim_t2i:\n", sim_t2i)
-
+    # Create labels and calculate loss
     labels = torch.arange(batch_size, device=device)
-    print("\n[DEBUG] Labels:\n", labels)
-
     loss_i2t = F.cross_entropy(sim_i2t, labels)
     loss_t2i = F.cross_entropy(sim_t2i, labels)
 
-    print(f"\n[DEBUG] Loss i2t: {loss_i2t.item()}, Loss t2i: {loss_t2i.item()}")
-
     total_loss = (loss_i2t + loss_t2i) / 2
-    print(f"[DEBUG] Total loss: {total_loss.item()}")
-
-    # terminate all code kernel wehatever interrupt
-    raise SystemExit
-
+    
     return total_loss
 
 
@@ -135,8 +108,8 @@ def mod_77_long_clip_loss(model, image_embedding, long_subsections_batch, short_
         Combined weighted loss
     """
     # Normalize features
-    image_features_long = image_embedding / image_embedding.norm(dim=1, keepdim=True)
-    text_features_short = short_embedding / short_embedding.norm(dim=1, keepdim=True)
+    image_features_long = image_embedding
+    text_features_short = short_embedding 
     
     # Apply PCA to get compressed image features (assuming PCA function exists)
     from .train import PCA
@@ -163,8 +136,8 @@ def mod_77_long_clip_loss(model, image_embedding, long_subsections_batch, short_
     
     # Calculate short text loss
     loss_short = (
-        F.cross_entropy(sim_i2ts, targets, label_smoothing=0.1)
-        + F.cross_entropy(sim_ts2i, targets, label_smoothing=0.1)
+        F.cross_entropy(sim_i2ts, targets)
+        + F.cross_entropy(sim_ts2i, targets)
     ) / 2
     
     # Combine losses

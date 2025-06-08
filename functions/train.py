@@ -183,7 +183,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
     
     # Step 3: Setup optimizer
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
+    #scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     
     # Step 4: Training loop
     model.train()
@@ -245,7 +245,7 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
             progress_bar.set_postfix({'loss': batch_loss, 'avg_loss': total_loss/(batch_idx+1), 'mode': training_mode})
         
         # Update learning rate
-        scheduler.step()
+        #scheduler.step()
         
         # Calculate average loss
         avg_loss = total_loss / len(train_loader)
@@ -261,7 +261,6 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
         print(f"\nEpoch {epoch+1}/{num_epochs} Summary:")
         print(f"  Training Loss: {avg_loss:.4f}")
         print(f"  Validation Loss: {val_loss:.4f}")
-        print(f"  Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
         print(f"  Elapsed Time: {elapsed_time:.2f}s")
         
         # Save best model
