@@ -285,46 +285,61 @@ def train_model(model, config, dataset, num_epochs=10, batch_size=32, learning_r
     plot_final_results(epochs_list, train_losses, val_losses, elapsed_time)
     return model
 
-def validate_model(model, test_loader, device, tokenizer=None, use_mod_77=True):
+def validate_model(model, test_loader, device, tokenizer=None, use_mod_77=True, training_mode='standard'):
     """
     Validate the model on test dataset.
     """
     model.eval()
     total_loss = 0
-    
-    # Check if test loader supports mod 77
-    sample_batch = next(iter(test_loader))
-    has_subsections = 'subsections' in sample_batch
-    training_mode = "mod_77" if use_mod_77 and has_subsections else "standard"
-    
-    # Reset the iterator
-    test_loader = iter(test_loader)
+    num_batches = 0
     
     with torch.no_grad():
         for batch_idx, batch_data in enumerate(test_loader):
             images = batch_data['images'].to(device)  
             short_captions = tokenizer(batch_data['short_captions']).to(device)
-            long_captions = tokenizer(batch_data['long_captions']).to(device)
+            long_captions_batch = batch_data['long_captions']
+            
+            if training_mode == 'randomized':
+                # Randomly select subsections for each sample
+                long_splitted_captions = batch_data['long_splitted_captions']
+                
+                for i, subsections in enumerate(long_splitted_captions):
+                    num_captions = len(subsections)
+                    
+                    # Calculate probabilities based on position (first caption gets higher probability)
+                    # Using exponential decay: first caption gets highest probability
+                    weights = [np.exp(-0.5 * j) for j in range(num_captions)]
+                    total_weight = sum(weights)
+                    probabilities = [weight / total_weight for weight in weights]
+                    
+                    # Select based on position-weighted probability
+                    selected_idx = np.random.choice(len(subsections), p=probabilities)
+                    long_captions_batch[i] = subsections[selected_idx]
+
+            long_captions = tokenizer(long_captions_batch).to(device)
             
             # Forward pass
             image_features = model.encode_image(images)
             text_features_short = model.encode_text(short_captions)
+            text_features_long = model.encode_text(long_captions)
             
-            if training_mode == "mod_77" and 'subsections' in batch_data:
-                # Use mod 77 validation
-                subsections_data = batch_data['subsections']
-                text_subsections_batch = process_batch_subsections(model, tokenizer, subsections_data, device)
-                loss = mod_77_long_clip_loss(model, image_features, text_subsections_batch, text_features_short)
-            else:
-                # Standard validation
-                long_captions = tokenizer(batch_data['long_captions']).to(device)
-                text_features_long = model.encode_text(long_captions)
-                loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
+            # Calculate base loss (same as in training)
+            loss = long_clip_loss(model, image_features, text_features_long, text_features_short)
+            
+            # Add mod 77 loss if enabled and data is available
+            if use_mod_77 and 'long_splitted_captions' in batch_data:
+                long_splitted_captions = batch_data['long_splitted_captions']
+                subsection_features_per_sample = process_batch_subsections_vectorized(
+                    model, tokenizer, long_splitted_captions, device
+                )
+                sub_caption_loss = mod_77_long_clip_loss(model, image_features, subsection_features_per_sample)
+                loss = ((loss * 2) + sub_caption_loss) / 3
             
             total_loss += loss.item()
+            num_batches += 1
     
     model.train()
-    return total_loss / len(test_loader)
+    return total_loss / num_batches
 
 def plot_training_progress(epochs, train_losses, val_losses):
     """
